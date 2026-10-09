@@ -4,6 +4,22 @@ An end-to-end security monitoring, threat intelligence enrichment, risk assessme
 
 The project demonstrates how endpoint and network detections can be transformed into enriched, prioritized incidents and followed by automated containment actions such as file quarantine, malicious process termination, and source IP blocking.
 
+# Threat Intelligence and Active Response
+
+Automated threat detection, intelligence enrichment, risk assessment, and active response platform built with Wazuh, MISP, VirusTotal, n8n, PostgreSQL, and Suricata.
+
+![Wazuh](https://img.shields.io/badge/Wazuh-SIEM-005571?style=flat-square&logo=wazuh&logoColor=white)
+![n8n](https://img.shields.io/badge/n8n-Automation-EA4B71?style=flat-square&logo=n8n&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-4169E1?style=flat-square&logo=postgresql&logoColor=white)
+![MISP](https://img.shields.io/badge/MISP-Threat%20Intelligence-2C3E50?style=flat-square)
+![VirusTotal](https://img.shields.io/badge/VirusTotal-Threat%20Intelligence-394EFF?style=flat-square&logo=virustotal&logoColor=white)
+![MITRE ATT&CK](https://img.shields.io/badge/MITRE-ATT%26CK-E34F26?style=flat-square)
+![Suricata](https://img.shields.io/badge/Suricata-Network%20Detection-EF3B2D?style=flat-square)
+![Docker](https://img.shields.io/badge/Docker-Containerization-2496ED?style=flat-square&logo=docker&logoColor=white)
+![VirtualBox](https://img.shields.io/badge/VirtualBox-Virtualization-183A61?style=flat-square&logo=virtualbox&logoColor=white)
+![Python](https://img.shields.io/badge/Python-Active%20Response-3776AB?style=flat-square&logo=python&logoColor=white)
+![Telegram](https://img.shields.io/badge/Telegram-Notifications-26A5E4?style=flat-square&logo=telegram&logoColor=white)
+
 
 ## Table of Contents
 
@@ -71,7 +87,7 @@ The monitored and attacking virtual machines communicate over a VirtualBox host-
 
 ### Threat Detection and Automated Response Architecture
 
-![Threat Detection and Automated Response Architecture](docs/architectures/workflow.png)
+![Threat Detection and Automated Response Architecture](docs/architectures/Threat%20Intelligence%20and%20Active%20Response.png)
 
 The main event path is:
 
@@ -100,7 +116,7 @@ Wazuh Manager forwards selected alerts to the n8n webhook. n8n uses the Wazuh RE
 
 | System / Network | Role | Address / Range |
 | --- | --- | --- |
-| Fedora host | Docker host for the security platform | `192.168.100.164/24` |
+| Fedora host | Docker host for the security platform | - |
 | UbuntuEndpoint | Linux endpoint, SSH target, process monitoring, Suricata sensor | `192.168.56.102` |
 | WindowsServer | Windows endpoint used for file monitoring and quarantine | `192.168.56.107` |
 | Kali Linux | Controlled attack simulation | `192.168.56.108` |
