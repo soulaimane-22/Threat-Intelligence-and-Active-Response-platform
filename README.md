@@ -735,6 +735,9 @@ The result is a practical implementation showing how Wazuh can be extended beyon
 
 ---
 
-**Environment:** Controlled cybersecurity lab only.  
-**Repository scope:** Configuration, custom detections, automation workflow, scripts, database schema, architecture diagrams, and dashboard evidence.  
-**Sensitive material:** Excluded by design.
+
+### Author
+
+**Soulaimane**  
+Security & Big Data Student  
+Focused on Cybersecurity, Threat Intelligence, Security Monitoring, and Big Data
