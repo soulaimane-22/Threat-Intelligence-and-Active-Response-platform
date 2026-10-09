@@ -1,0 +1,1 @@
+alert tcp $EXTERNAL_NET any -> $HOME_NET any (msg:"SCENARIO5 NMAP TCP SYN Scan Detected"; flags:S; flow:stateless; threshold:type both,track by_src,count 20,seconds 60; classtype:network-scan; sid:1000050; rev:2;)

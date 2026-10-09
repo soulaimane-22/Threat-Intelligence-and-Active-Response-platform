@@ -1,0 +1,29 @@
+<ossec_config>
+
+  <!-- SSH authentication monitoring -->
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/auth.log</location>
+  </localfile>
+
+  <!-- Scenario 3 process monitoring -->
+  <localfile>
+    <log_format>full_command</log_format>
+    <alias>process_monitor_s3</alias>
+    <command>/usr/local/bin/wazuh-process-monitor-s3.sh</command>
+    <frequency>30</frequency>
+  </localfile>
+
+  <!-- Active Response monitoring -->
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/ossec/logs/active-responses.log</location>
+  </localfile>
+
+  <!-- Suricata event monitoring -->
+  <localfile>
+    <log_format>json</log_format>
+    <location>/var/log/suricata/eve.json</location>
+  </localfile>
+
+</ossec_config>

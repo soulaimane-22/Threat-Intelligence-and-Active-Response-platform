@@ -1,0 +1,66 @@
+<!-- Local rules -->
+
+<!-- Modify it at your will. -->
+<!-- Copyright (C) 2015, Wazuh Inc. -->
+
+<!-- Example -->
+<group name="local,syslog,sshd,active_response,quarantine,process_monitor,scenario3,suricata,scenario5,">
+
+  <!--
+  Dec 10 01:02:02 host sshd[1234]: Failed none for root from 1.1.1.1 port 1066 ssh2
+  -->
+  <rule id="100001" level="5">
+    <if_sid>5716</if_sid>
+    <srcip>1.1.1.1</srcip>
+    <description>sshd: authentication failed from IP 1.1.1.1.</description>
+    <group>authentication_failed,pci_dss_10.2.4,pci_dss_10.2.5,</group>
+  </rule>
+
+  <rule id="100110" level="7">
+    <match>QUARANTINE_SUCCESS</match>
+    <description>Malicious file successfully quarantined.</description>
+  </rule>
+
+  <rule id="100111" level="10">
+    <match>QUARANTINE_ERROR</match>
+    <description>Failed to quarantine malicious file.</description>
+  </rule>
+
+  <rule id="100210" level="0">
+    <decoded_as>scenario3-process-fields</decoded_as>
+    <description>Scenario 3 process monitoring output.</description>
+    <group>process_monitor,scenario3,</group>
+  </rule>
+
+  <rule id="100211" level="10" ignore="60">
+    <if_sid>100210</if_sid>
+
+    <field name="process.executable">^/usr/bin/ncat$</field>
+
+    <description>Scenario 3: Suspicious Netcat listening process detected.</description>
+
+    <group>process_monitor,suspicious_process,scenario3,</group>
+  </rule>
+
+  <rule id="100212" level="7">
+    <if_sid>650</if_sid>
+    <match>KILL_PROCESS_SUCCESS</match>
+    <description>Scenario 3: Malicious process successfully terminated.</description>
+    <group>active_response,process_killed,scenario3,</group>
+  </rule>
+
+  <rule id="100220" level="10" ignore="60">
+    <if_sid>86601</if_sid>
+
+    <field name="alert.signature_id">^1000050$</field>
+
+    <description>Scenario 5: Nmap TCP SYN network scan detected.</description>
+
+    <mitre>
+      <id>T1046</id>
+    </mitre>
+
+    <group>suricata,network_scan,discovery,scenario5,</group>
+  </rule>
+
+</group>

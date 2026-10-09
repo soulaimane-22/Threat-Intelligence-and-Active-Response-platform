@@ -1,0 +1,61 @@
+<!-- Custom Active Response commands -->
+
+
+<command>
+  <name>quarantine-file</name>
+  <executable>quarantine-file.exe</executable>
+  <timeout_allowed>no</timeout_allowed>
+</command>
+
+
+<!-- Wazuh to n8n integrations -->
+
+<integration>
+  <name>shuffle</name>
+  <hook_url>http://n8n:5678/webhook/wazuh_alert</hook_url>
+  <group>syscheck,active_response</group>
+  <alert_format>json</alert_format>
+</integration>
+
+<integration>
+  <name>shuffle</name>
+  <hook_url>http://n8n:5678/webhook/wazuh_alert</hook_url>
+  <rule_id>5712</rule_id>
+  <alert_format>json</alert_format>
+</integration>
+
+<integration>
+  <name>shuffle</name>
+  <hook_url>http://n8n:5678/webhook/wazuh_alert</hook_url>
+  <rule_id>651</rule_id>
+  <alert_format>json</alert_format>
+</integration>
+
+<integration>
+  <name>shuffle</name>
+  <hook_url>http://n8n:5678/webhook/wazuh_alert</hook_url>
+  <rule_id>100211</rule_id>
+  <alert_format>json</alert_format>
+</integration>
+
+<integration>
+  <name>shuffle</name>
+  <hook_url>http://n8n:5678/webhook/wazuh_alert</hook_url>
+  <rule_id>100212</rule_id>
+  <alert_format>json</alert_format>
+</integration>
+
+<integration>
+  <name>shuffle</name>
+  <hook_url>http://n8n:5678/webhook/wazuh_alert</hook_url>
+  <rule_id>100220</rule_id>
+  <alert_format>json</alert_format>
+</integration>
+
+
+<!-- Active Response log collection -->
+
+<localfile>
+  <log_format>syslog</log_format>
+  <location>/var/ossec/logs/active-responses.log</location>
+</localfile>

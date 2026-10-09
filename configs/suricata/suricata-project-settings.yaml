@@ -1,0 +1,18 @@
+# Network variables
+vars:
+  address-groups:
+    HOME_NET: "[192.168.56.102]"
+    EXTERNAL_NET: "any"
+
+# Packet capture interface
+af-packet:
+  - interface: enp0s8
+    cluster-id: 99
+    cluster-type: cluster_flow
+
+# Rules
+default-rule-path: /var/lib/suricata/rules
+
+rule-files:
+  - suricata.rules
+  - /etc/suricata/rules/scenario5.rules

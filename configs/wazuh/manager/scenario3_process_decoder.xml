@@ -1,0 +1,7 @@
+<decoder name="scenario3-process-fields">
+  <parent>ossec</parent>
+  <prematch type="pcre2">SUSPICIOUS_PROCESS</prematch>
+  <regex type="pcre2">pid=(\d+)\s+user=(\S+)\s+exe=(\S+)\s+sha256=([A-Fa-f0-9]{64})\s+cmd="([^"]+)"</regex>
+  <order>process.pid,process.user,process.executable,process.sha256,process.command</order>
+  <use_own_name>true</use_own_name>
+</decoder>

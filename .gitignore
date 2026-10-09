@@ -1,0 +1,118 @@
+# Environment files
+.env
+.env.*
+!.env.example
+*.env
+
+# Local secrets
+secrets/
+credentials/
+private/
+_local/
+
+# API keys and credentials
+credentials.json
+credentials*.json
+secrets.json
+secrets*.json
+*token*
+*apikey*
+*api_key*
+*password*
+*passwd*
+
+# Keep sanitized examples
+!*example*
+!*sample*
+!*template*
+
+# SSH keys
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+*.ppk
+
+# Certificates and private keys
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# Wazuh sensitive files
+configs/wazuh/**/ssl/
+configs/wazuh/**/certs/
+configs/wazuh/**/credentials/
+configs/wazuh/**/authd.pass
+configs/wazuh/**/client.keys
+
+# Wazuh runtime data
+**/queue/
+**/var/ossec/logs/
+**/var/ossec/queue/
+
+# n8n sensitive data
+.n8n/
+configs/n8n/credentials/
+configs/n8n/.env
+configs/n8n/database.sqlite
+configs/n8n/*.sqlite
+configs/n8n/backups/
+configs/n8n/export/credentials*
+
+# MISP sensitive data
+configs/misp/.env
+configs/misp/secrets/
+configs/misp/credentials/
+configs/misp/*key*
+configs/misp/*token*
+configs/misp/data/
+configs/misp/files/
+
+# PostgreSQL local data
+configs/postgresql/.env
+configs/postgresql/credentials/
+configs/postgresql/data/
+
+# Database backups
+*.sql.gz
+*.dump
+*.backup
+*.bak
+backups/
+dumps/
+
+# Docker local files
+docker-compose.override.yml
+docker-compose.local.yml
+compose.override.yml
+compose.local.yml
+configs/docker/.env
+configs/docker/secrets/
+
+# Integration secrets
+*telegram*token*
+*virustotal*key*
+*vt_api*
+*misp_api*
+
+# Logs and runtime files
+*.log
+logs/
+tmp/
+temp/
+*.pid
+*.sock
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Private notes
+notes-private/
+TODO-private.md
+Documentation/

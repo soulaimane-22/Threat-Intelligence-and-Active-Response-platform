@@ -1,0 +1,3121 @@
+{
+  "name": "Wazuh_Threat_Intelligence_Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM ioc_cache WHERE value = '{{ $json.body.all_fields.syscheck.sha256_after }}';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        -896,
+        144
+      ],
+      "id": "62835beb-7688-419e-8e5b-8ea3ac3ea158",
+      "name": "Execute a SQL query",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wazuh_alert",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -2288,
+        -624
+      ],
+      "id": "e5483f1b-2572-4948-a9ba-25fbb0448ec1",
+      "name": "Interact with Wazuh"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f919c082-f9da-4e78-99a8-110cc662ca23",
+              "leftValue": "={{ $('Execute a SQL query').first().json.id }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -752,
+        144
+      ],
+      "id": "9ccaf8a0-f1b3-498d-97b8-bfa276be828b",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://single-node-misp-nginx-1:8443/attributes/restSearch",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Host",
+              "value": "localhost:8443"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"returnFormat\": \"json\",\n  \"value\": \"{{ $('Interact with Wazuh').item.json.body.all_fields.syscheck.sha256_after }}\",\n  \"type\": \"sha256\"\n}",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -592,
+        0
+      ],
+      "id": "45073322-6897-4049-acda-0b0f52e71b78",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "url": "=https://www.virustotal.com/api/v3/files/{{ $('Interact with Wazuh').item.json.body.all_fields.syscheck.sha256_after }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -160,
+        -160
+      ],
+      "id": "b06e2482-e010-4299-87ea-fa349288f1a2",
+      "name": "VirusTotal"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "859a5369-2b14-4a85-aff5-6b450fefa484",
+              "name": "malicious_count",
+              "value": "={{ $json.data.attributes.last_analysis_stats.malicious }}",
+              "type": "string"
+            },
+            {
+              "id": "df004f1a-2752-4059-867f-d024d808e44d",
+              "name": "total_engines",
+              "value": "={{ $json.data.attributes.last_analysis_stats.malicious + $json.data.attributes.last_analysis_stats.suspicious + $json.data.attributes.last_analysis_stats.undetected + $json.data.attributes.last_analysis_stats.harmless }}",
+              "type": "string"
+            },
+            {
+              "id": "fe266ec3-17e5-485c-8b9a-b0ed6707cffe",
+              "name": "reputation_score",
+              "value": "={{ Math.round(($json.data.attributes.last_analysis_stats.malicious / (($json.data.attributes.last_analysis_stats.malicious + $json.data.attributes.last_analysis_stats.suspicious + $json.data.attributes.last_analysis_stats.undetected + $json.data.attributes.last_analysis_stats.harmless))) * 100) }}",
+              "type": "string"
+            },
+            {
+              "id": "2e147021-cfc3-43e6-998a-99b2d70aa09c",
+              "name": "verdict",
+              "value": "={{ $json.data.attributes.last_analysis_stats.malicious > 10 ? 'malveillant' : ($json.data.attributes.last_analysis_stats.malicious > 0 ? 'suspect' : 'propre') }}",
+              "type": "string"
+            },
+            {
+              "id": "8505be62-d946-440d-b09a-38cd84d4b3b3",
+              "name": "source",
+              "value": "VirusTotal",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        16,
+        -160
+      ],
+      "id": "226bf6d1-9eff-4c82-9db6-cad482f53177",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO ioc_cache (value, type, source, verdict, reputation_score)\nVALUES (\n  '{{ $('Interact with Wazuh').item.json.body.all_fields.syscheck.sha256_after }}',\n  'hash',\n  '{{ $json.source }}',\n  '{{ $json.verdict }}',\n  {{ $json.reputation_score }}\n)\nRETURNING verdict, reputation_score;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        176,
+        16
+      ],
+      "id": "9054c2b6-ac55-40a6-9bba-901da74bedd2",
+      "name": "append to ioc_cache",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO incidents (agent_source, wazuh_rule_id, mitre_technique, ioc_id, risk_score, criticality)\nVALUES (\n'{{ $('Interact with Wazuh').item.json.body.all_fields.agent.name }}',\n{{ $('Interact with Wazuh').item.json.body.all_fields.rule.id }},\n{{ $('Interact with Wazuh').item.json.body.all_fields.rule.mitre ? \"'\" + $('Interact with Wazuh').item.json.body.all_fields.rule.mitre.id[0] + \"'\" : \"NULL\" }},\n(SELECT id FROM ioc_cache WHERE value = '{{ $('Interact with Wazuh').item.json.body.all_fields.syscheck.sha256_after }}'),\n  {{ $json.reputation_score }},\n  '{{ $json.reputation_score > 70 ? \"critical\" : ($json.reputation_score > 40 ? \"high\" : ($json.reputation_score > 10 ? \"medium\" : \"low\")) }}'\n)\nRETURNING id, risk_score, criticality;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        416,
+        272
+      ],
+      "id": "4eab91c2-dcc4-4024-b4e1-b1a0fcab1f7d",
+      "name": "enregistrement de l'incident et décision finale"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "28c5115a-9b93-4043-857e-665f9e77dc50",
+              "leftValue": "={{ $('enregistrement de l\\'incident et décision finale').item.json.risk_score }}",
+              "rightValue": 50,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        672,
+        128
+      ],
+      "id": "a7ced64d-9962-45f0-8bfa-d357cbd7e70b",
+      "name": "Risk threshold reached?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO actions_taken (incident_id, action_type, execution_status)\nVALUES (\n  (SELECT id FROM incidents ORDER BY id DESC LIMIT 1),\n  'notify_telegram',\n  'pending'\n)\nRETURNING id;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        960,
+        112
+      ],
+      "id": "827867bb-c3af-4019-918e-beb6c4195c8d",
+      "name": "Actions to take"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO actions_taken (incident_id, action_type, execution_status)\nVALUES (\n  (SELECT id FROM incidents ORDER BY id DESC LIMIT 1),\n  'keep_monitoring',\n  'completed'\n);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1152,
+        304
+      ],
+      "id": "1e628b23-72ac-499c-8763-d5d36d7c2196",
+      "name": "Actions to take 2"
+    },
+    {
+      "parameters": {
+        "chatId": "<TELEGRAM_CHAT_ID>",
+        "text": "=🚨 Alerte SOC - Incident critique\n\nAgent: {{ $('Interact with Wazuh').item.json.body.all_fields.agent.name }}\nHash: {{ $('Interact with Wazuh').item.json.body.all_fields.syscheck.sha256_after }}\nDescription: {{ $('Interact with Wazuh').item.json.body.all_fields.rule.description }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1152,
+        112
+      ],
+      "id": "878d7238-24dc-4cd0-9f83-5a2583204f2f",
+      "name": "Send a text message",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "011f08ff-88aa-45c9-80f4-e5b19e2ffaac",
+              "name": "reputation_score",
+              "value": "={{ $('Execute a SQL query').first().json.reputation_score }}",
+              "type": "number"
+            },
+            {
+              "id": "abb82873-ca26-4e89-94f1-1da390632358",
+              "name": "verdict",
+              "value": "={{ $('Execute a SQL query').first().json.verdict }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -576,
+        288
+      ],
+      "id": "7559d9d5-217f-4aad-94f2-0ed7ecf4ebe5",
+      "name": "Cache hit - Set"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "bc364d79-7f4f-4b40-af16-868d46bdf6b2",
+              "name": "reputation_score",
+              "value": 90,
+              "type": "number"
+            },
+            {
+              "id": "aaa9e488-822a-4198-8c20-3cb2e642cfa0",
+              "name": "verdict",
+              "value": "malveillant",
+              "type": "string"
+            },
+            {
+              "id": "96db322b-697c-49e1-ab53-c00adc41633b",
+              "name": "source",
+              "value": "MISP",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -176,
+        16
+      ],
+      "id": "a5057bb3-2992-428c-a031-84f3a9001f2b",
+      "name": "MISP hit - Set"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "221f102e-d359-4df9-9779-23d365853661",
+              "leftValue": "={{ $json.response.Attribute.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -432,
+        0
+      ],
+      "id": "f4610ac4-5a2c-439d-a426-dc9402085f39",
+      "name": "MISP didnt find?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://wazuh.manager:55000/security/user/authenticate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1616,
+        112
+      ],
+      "id": "ca1157b1-fdcc-4fa5-a91b-284406c498f8",
+      "name": "Wazuh Auth"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://wazuh.manager:55000/active-response?agents_list={{ $('Interact with Wazuh').item.json.body.all_fields.agent.id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Wazuh Auth').item.json.data.token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"command\": \"!quarantine-file.exe\",\n  \"arguments\": [\n    $('Interact with Wazuh').item.json.body.all_fields.syscheck.path\n  ],\n  \"alert\": {\n    \"syscheck\": {\n      \"path\": $('Interact with Wazuh').item.json.body.all_fields.syscheck.path\n    },\n    \"rule\": {\n      \"id\": $('Interact with Wazuh').item.json.body.all_fields.rule.id\n    }\n  }\n} }}",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1872,
+        112
+      ],
+      "id": "f53eac12-e03a-4ebe-92f6-3c01c1c7d4df",
+      "name": "quarantine file"
+    },
+    {
+      "parameters": {
+        "chatId": "<TELEGRAM_CHAT_ID>",
+        "text": "=✅ SOC - File Quarantine\n\nAgent: {{ $('Interact with Wazuh').item.json.body.all_fields.agent.name }}\n\nFile: {{ $('Interact with Wazuh').item.json.body.all_fields.syscheck.path }}\n\nSHA256: {{ $('Interact with Wazuh').item.json.body.all_fields.syscheck.sha256_after }}\n\nRisk score: {{ $('enregistrement de l\\'incident et décision finale').item.json.risk_score }}\n\nAction: QUARANTINE\n\nStatus: Active Response sent to endpoint",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2272,
+        112
+      ],
+      "id": "9e1918b6-3d66-4f5c-9a07-80c0fb865616",
+      "name": "Telegram - File Quarantined"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.all_fields.rule.id }}",
+                    "rightValue": "554",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "8604166d-f36b-42ff-89ac-9546af06cd58"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "ADDED"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "7729ae6f-6f0d-459e-b995-d58e9d75edc7",
+                    "leftValue": "={{ $json.body.all_fields.rule.id }}",
+                    "rightValue": "553",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "DELETED"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -1232,
+        128
+      ],
+      "id": "5bd6d39c-9054-4c2f-bde5-0887fb14cbc0",
+      "name": "FIM Event Router"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO actions_taken (\n    incident_id,\n    action_type,\n    execution_status,\n    target_path,\n    target_sha256\n)\nVALUES (\n    {{ $('enregistrement de l\\'incident et décision finale').item.json.id }},\n    'quarantine_file',\n    'pending',\n    '{{ $('Interact with Wazuh').item.json.body.all_fields.syscheck.path.replace(/'/g, \"''\") }}',\n    '{{ $('Interact with Wazuh').item.json.body.all_fields.syscheck.sha256_after }}'\n)\nRETURNING\n    id,\n    incident_id,\n    target_path,\n    target_sha256,\n    execution_status;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1376,
+        112
+      ],
+      "id": "37bcfa39-8b85-4e42-976f-7f477405ffdc",
+      "name": "Register quarantine pending"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE actions_taken\nSET execution_status = 'sent'\nWHERE id = {{ $('Register quarantine pending').item.json.id }}\nRETURNING\n    id,\n    incident_id,\n    execution_status,\n    target_path,\n    target_sha256;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        2080,
+        112
+      ],
+      "id": "c0e9a295-f970-42cf-bfd6-db8b20bcdac2",
+      "name": "Mark quarantine sent"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    a.id AS action_id,\n    a.incident_id,\n    a.target_path,\n    a.target_sha256,\n    a.execution_status,\n    a.created_at,\n    i.agent_source,\n    i.risk_score,\n    i.criticality\nFROM actions_taken a\nJOIN incidents i\n    ON i.id = a.incident_id\nWHERE a.action_type = 'quarantine_file'\n\n  AND a.execution_status IN ('pending', 'sent')\n\n  AND LOWER(a.target_path) =\n      LOWER('{{ $('Interact with Wazuh').item.json.body.all_fields.syscheck.path.replace(/'/g, \"''\") }}')\n\n  AND i.agent_source =\n      '{{ $('Interact with Wazuh').item.json.body.all_fields.agent.name.replace(/'/g, \"''\") }}'\n\n  AND a.created_at >= NOW() - INTERVAL '5 minutes'\n\nORDER BY a.created_at DESC\nLIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        -1120,
+        496
+      ],
+      "id": "e8b27220-b844-46a2-936f-7f5e0a82c094",
+      "name": "Find matching quarantine"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "845f34f8-08d4-4442-8edc-dd9d321aff17",
+              "leftValue": "={{ $json.action_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "number",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -896,
+        496
+      ],
+      "id": "160b6928-82ed-430e-bce8-66a8cf9c9247",
+      "name": "Quarantine match?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE actions_taken\nSET execution_status = 'completed'\nWHERE id = {{ $('Find matching quarantine').item.json.action_id }}\nRETURNING\n    id,\n    incident_id,\n    target_path,\n    target_sha256,\n    execution_status;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        -592,
+        480
+      ],
+      "id": "c281e924-1ec6-4c09-a747-63ac095dce72",
+      "name": "Confirm quarantine"
+    },
+    {
+      "parameters": {
+        "chatId": "<TELEGRAM_CHAT_ID>",
+        "text": "=✅ SOC - File Successfully Quarantined\n\nAgent: {{ $('Interact with Wazuh').item.json.body.all_fields.agent.name }}\n\nFile: {{ $('Find matching quarantine').item.json.target_path }}\n\nSHA256: {{ $('Find matching quarantine').item.json.target_sha256 }}\n\nRisk score: {{ $('Find matching quarantine').item.json.risk_score }}\n\nCriticality: {{ $('Find matching quarantine').item.json.criticality }}\n\nAction: QUARANTINE\n\nStatus: CONFIRMED\n\nWazuh confirmation:\nRule 553 - File removed from monitored directory",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -368,
+        480
+      ],
+      "id": "fe023976-1242-4a61-a43c-3d23dc70a647",
+      "name": "Telegram - File Quarantined2",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "6e6ac130-3943-4bc0-ab58-594f7cf46435",
+              "leftValue": "={{ String($json.body.all_fields.rule.id) }}",
+              "rightValue": "5712",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "57c0ae4e-778f-4837-8d9b-1521d2ee4667",
+              "leftValue": "={{ String($json.body.all_fields.agent.id) }}",
+              "rightValue": "001",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "a80688aa-3c11-4e0c-b62f-e6a158c11513",
+              "leftValue": "={{ $json.body.all_fields.data?.srcip || '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1216,
+        -400
+      ],
+      "id": "e1ed67c2-89e3-485c-9557-93bdf452c933",
+      "name": "Ubuntu Brute Force?"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "fe9ce7c5-a9d6-4b1d-88ea-55e13e51ef15",
+              "name": "agent_id",
+              "value": "={{ $('Interact with Wazuh').item.json.body.all_fields.agent.id }}",
+              "type": "string"
+            },
+            {
+              "id": "f30519a2-b080-40fd-a17e-6b9620c479da",
+              "name": "agent_name",
+              "value": "={{ $('Interact with Wazuh').item.json.body.all_fields.agent.name }}",
+              "type": "string"
+            },
+            {
+              "id": "5b1bcca1-573f-4a60-be33-bf35a040f2cf",
+              "name": "victim_ip",
+              "value": "={{ $('Interact with Wazuh').item.json.body.all_fields.agent.ip }}",
+              "type": "string"
+            },
+            {
+              "id": "f1b6d7e3-dd34-4983-98a3-7efaee09ea9c",
+              "name": "attacker_ip",
+              "value": "={{ $('Interact with Wazuh').item.json.body.all_fields.data.srcip }}",
+              "type": "string"
+            },
+            {
+              "id": "aea8571e-86ee-4e90-bd45-8cb5c5fa5175",
+              "name": "attacker_user",
+              "value": "={{ $('Interact with Wazuh').item.json.body.all_fields.data.srcuser }}",
+              "type": "string"
+            },
+            {
+              "id": "be9c9b73-c0d5-4885-834c-922449f4a3b3",
+              "name": "attacker_port",
+              "value": "={{ $('Interact with Wazuh').item.json.body.all_fields.data.srcport }}",
+              "type": "string"
+            },
+            {
+              "id": "a712fd47-19ce-4069-8d33-d86c803b0e34",
+              "name": "rule_id",
+              "value": "={{ Number($('Interact with Wazuh').item.json.body.all_fields.rule.id) }}",
+              "type": "string"
+            },
+            {
+              "id": "dbc0fbc2-242a-4275-a632-482af506eb3f",
+              "name": "rule_level",
+              "value": "={{ Number($('Interact with Wazuh').item.json.body.all_fields.rule.level) }}",
+              "type": "string"
+            },
+            {
+              "id": "67e56455-53b4-46ec-bac5-84425228f2f4",
+              "name": "frequency",
+              "value": "={{ Number($('Interact with Wazuh').item.json.body.all_fields.rule.frequency || 0) }}",
+              "type": "string"
+            },
+            {
+              "id": "4fe30723-1c07-4593-a69d-a0fc63dab7d9",
+              "name": "mitre_id",
+              "value": "={{ $('Interact with Wazuh').item.json.body.all_fields.rule.mitre?.id?.[0] || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "f8804b49-9e87-41ca-af71-8bee722468d7",
+              "name": "mitre_technique",
+              "value": "={{ $('Interact with Wazuh').item.json.body.all_fields.rule.mitre?.id?.[0] || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "84773da8-6dac-4f94-8340-7572eb296d57",
+              "name": "mitre_tactic",
+              "value": "={{ $('Interact with Wazuh').item.json.body.all_fields.rule.mitre?.tactic?.[0] || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "ca84497f-977e-4768-aa1e-8a44a6495dbb",
+              "name": "description",
+              "value": "={{ $('Interact with Wazuh').item.json.body.all_fields.rule.description }}",
+              "type": "string"
+            },
+            {
+              "id": "24a7a4d1-737e-45fc-8bfe-0233be642c66",
+              "name": "risk_score",
+              "value": "={{ Math.min(\n  100,\n  Number($('Interact with Wazuh').item.json.body.all_fields.rule.level || 0) * 6\n  +\n  Number($('Interact with Wazuh').item.json.body.all_fields.rule.frequency || 0) * 2\n  +\n  (\n    ($('Interact with Wazuh').item.json.body.all_fields.rule.mitre?.id || []).includes('T1110')\n    ? 20\n    : 0\n  )\n) }}",
+              "type": "number"
+            },
+            {
+              "id": "23908701-0d8d-4d12-a6f6-bf33b446fdf5",
+              "name": "criticality",
+              "value": "={{ $json.risk_score >= 80   ? 'critical'   : ($json.risk_score >= 60       ? 'high'       : ($json.risk_score >= 40 ? 'medium' : 'low')) }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -848,
+        -496
+      ],
+      "id": "0283ff5d-bd51-4ed9-b38f-bfea4bdb8dec",
+      "name": "Prepare Brute Force Data"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH updated AS (\n    UPDATE ioc_cache\n    SET\n        type = 'ip',\n        source = 'Wazuh',\n        verdict = 'brute_force',\n        reputation_score = {{ $('Prepare Brute Force Data').item.json.risk_score }}\n    WHERE value = '{{ $('Prepare Brute Force Data').item.json.attacker_ip }}'\n    RETURNING id\n),\ninserted AS (\n    INSERT INTO ioc_cache (\n        value,\n        type,\n        source,\n        verdict,\n        reputation_score\n    )\n    SELECT\n        '{{ $('Prepare Brute Force Data').item.json.attacker_ip }}',\n        'ip',\n        'Wazuh',\n        'brute_force',\n        {{ $('Prepare Brute Force Data').item.json.risk_score }}\n    WHERE NOT EXISTS (\n        SELECT 1 FROM updated\n    )\n    RETURNING id\n)\n\nSELECT id FROM updated\nUNION ALL\nSELECT id FROM inserted\nLIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        -624,
+        -496
+      ],
+      "id": "40a88add-87cd-47dd-bd2d-8065c73521ab",
+      "name": "Register Brute Force IOC"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO incidents (\n    agent_source,\n    wazuh_rule_id,\n    mitre_technique,\n    ioc_id,\n    risk_score,\n    criticality\n)\nVALUES (\n    '{{ $('Prepare Brute Force Data').item.json.agent_name }}',\n\n    {{ $('Prepare Brute Force Data').item.json.rule_id }},\n\n    '{{ $('Prepare Brute Force Data').item.json.mitre_id }}',\n\n    {{ $('Register Brute Force IOC').item.json.id }},\n\n    {{ $('Prepare Brute Force Data').item.json.risk_score }},\n\n    CASE\n        WHEN {{ $('Prepare Brute Force Data').item.json.risk_score }} >= 80 THEN 'critical'\n        WHEN {{ $('Prepare Brute Force Data').item.json.risk_score }} >= 60 THEN 'high'\n        WHEN {{ $('Prepare Brute Force Data').item.json.risk_score }} >= 40 THEN 'medium'\n        ELSE 'low'\n    END\n)\nRETURNING\n    id,\n    risk_score,\n    criticality;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        -400,
+        -496
+      ],
+      "id": "d299a62c-a06b-4b4c-9d1a-fce057789c67",
+      "name": "Register Brute Force Incident"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "43b3e940-8529-4c3b-a2cf-7e9954e6d16f",
+              "leftValue": "={{ $json.risk_score }}",
+              "rightValue": 50,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -160,
+        -496
+      ],
+      "id": "6a9490c0-6d53-458c-b76b-caffd30ff118",
+      "name": "Brute Force Risk threshold?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO actions_taken (\n    incident_id,\n    action_type,\n    execution_status\n)\nVALUES (\n    {{ $('Register Brute Force Incident').item.json.id }},\n    'notify_telegram',\n    'pending'\n)\nRETURNING id;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        160,
+        -512
+      ],
+      "id": "a8d7faed-3a3b-4c82-b65a-72b6721e6eac",
+      "name": "Register Brute Force Notification"
+    },
+    {
+      "parameters": {
+        "chatId": "<TELEGRAM_CHAT_ID>",
+        "text": "=🚨 SOC - SSH Brute Force Detected\n\nAgent: {{ $('Prepare Brute Force Data').item.json.agent_name }}\n\nVictim IP: {{ $('Prepare Brute Force Data').item.json.victim_ip }}\n\nAttacker IP: {{ $('Prepare Brute Force Data').item.json.attacker_ip }}\n\nUsername: {{ $('Prepare Brute Force Data').item.json.attacker_user }}\n\nRule: {{ $('Prepare Brute Force Data').item.json.rule_id }}\n\nMITRE: {{ $('Prepare Brute Force Data').item.json.mitre_id }} - {{ $('Prepare Brute Force Data').item.json.mitre_technique }}\n\nTactic: {{ $('Prepare Brute Force Data').item.json.mitre_tactic }}\n\nRisk score: {{ $('Register Brute Force Incident').item.json.risk_score }}/100\n\nCriticality: {{ $('Register Brute Force Incident').item.json.criticality.toUpperCase() }}\n\nDecision: BLOCK IP\n\nStatus: Awaiting Active Response",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        464,
+        -512
+      ],
+      "id": "ddcbb56e-b2da-404b-a857-a981bf8cd2e7",
+      "name": "Telegram - SSH Brute Force",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO actions_taken (\n    incident_id,\n    action_type,\n    execution_status,\n    target_ip\n)\nVALUES (\n    {{ $('Register Brute Force Incident').item.json.id }},\n    'block_ip',\n    'pending',\n    '{{ $('Prepare Brute Force Data').item.json.attacker_ip }}'\n)\nRETURNING id, target_ip;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        704,
+        -512
+      ],
+      "id": "66aa2ac3-a0cd-47f8-a358-d2db08a9d1fd",
+      "name": "Register Block IP Pending"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://wazuh.manager:55000/security/user/authenticate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        928,
+        -512
+      ],
+      "id": "d5dc91a3-e318-4c37-a321-2f6057e66e9a",
+      "name": "Wazuh Auth - Ubuntu"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://wazuh.manager:55000/active-response?agents_list={{ $('Prepare Brute Force Data').item.json.agent_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Wazuh Auth - Ubuntu').item.json.data.token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"command\": \"firewall-drop0\",\n  \"arguments\": [\"-\"],\n  \"alert\": {\n    \"data\": {\n      \"srcip\": $('Prepare Brute Force Data').item.json.attacker_ip\n    }\n  }\n} }}",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1152,
+        -512
+      ],
+      "id": "01823cae-f595-44b4-9ed6-fd42eaa1d429",
+      "name": "Block Brute Force IP"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE actions_taken\nSET execution_status = 'sent'\nWHERE id = {{ $('Register Block IP Pending').item.json.id }}\nRETURNING id, execution_status;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1360,
+        -512
+      ],
+      "id": "0e4afcba-899d-4cfd-a2a1-8e363d4ef6eb",
+      "name": "Mark Block IP Sent"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "8d5a28ec-5959-47eb-9ea2-7f171f75b0c6",
+              "leftValue": "={{ String($json.body.all_fields.rule.id) }}",
+              "rightValue": "651",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "417654fc-afd0-48a1-90ef-35165cb1c976",
+              "leftValue": "={{ $json.body.all_fields.data?.parameters?.program || '' }}",
+              "rightValue": "active-response/bin/firewall-drop",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "c3d99ce4-607c-423b-a226-775ea9d81f8c",
+              "leftValue": "={{ $json.body.all_fields.data?.command || '' }}",
+              "rightValue": "add",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1216,
+        -688
+      ],
+      "id": "1316466a-066e-4f20-9da0-31fe89947da9",
+      "name": "Ubuntu Block Confirmed?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    a.id AS action_id,\n    a.incident_id,\n    a.target_ip,\n    a.execution_status,\n    a.created_at,\n    i.agent_source,\n    i.risk_score,\n    i.criticality\nFROM actions_taken a\nJOIN incidents i\n    ON i.id = a.incident_id\nWHERE a.action_type = 'block_ip'\n\n  AND a.execution_status IN ('pending', 'sent')\n\n  AND a.target_ip =\n      '{{ $('Interact with Wazuh').item.json.body.all_fields.data.srcip }}'\n\n  AND i.agent_source =\n      '{{ $('Interact with Wazuh').item.json.body.all_fields.agent.name }}'\n\n  AND a.created_at >= NOW() - INTERVAL '5 minutes'\n\nORDER BY a.created_at DESC\nLIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        -912,
+        -704
+      ],
+      "id": "1bbca09d-abab-4730-a072-cd556deaf8f3",
+      "name": "Find matching block action",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "2a53e30f-0b69-4695-9238-e7f6386ce794",
+              "leftValue": "={{ $json.action_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "number",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -688,
+        -704
+      ],
+      "id": "44f1c5af-2a3f-42ab-abe6-5c90b10f7f41",
+      "name": "Block action match?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE actions_taken\nSET execution_status = 'completed'\nWHERE id = {{ $('Find matching block action').item.json.action_id }}\nRETURNING\n    id,\n    incident_id,\n    target_ip,\n    execution_status;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        -432,
+        -720
+      ],
+      "id": "066c94af-a847-4aca-9643-5b0b49531cdb",
+      "name": "Confirm Block IP",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "chatId": "<TELEGRAM_CHAT_ID>",
+        "text": "=✅ SOC - Attacker IP Blocked\n\nAgent: {{ $('Interact with Wazuh').item.json.body.all_fields.agent.name }}\n\nAttacker IP: {{ $('Interact with Wazuh').item.json.body.all_fields.data.srcip }}\n\nAction: firewall-drop\n\nWazuh Rule: 651\n\nRisk score: {{ $('Find matching block action').item.json.risk_score }}/100\n\nCriticality: {{ $('Find matching block action').item.json.criticality.toUpperCase() }}\n\nStatus: BLOCK CONFIRMED",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -224,
+        -720
+      ],
+      "id": "e2cb4ab5-6e53-436b-bdf7-1e9d1f13c7d8",
+      "name": "Telegram - IP Block Confirmed",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a875cefa-153e-4400-97e2-826cc3e9acd6",
+              "leftValue": "={{ String($json.body.all_fields.rule.id) }}",
+              "rightValue": "100211",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "09d4f489-0ceb-447c-b24d-b81c775a21c8",
+              "leftValue": "={{ String($json.body.all_fields.agent.id) }}",
+              "rightValue": "001",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "719e53e0-8f5e-4161-a291-cbf72a43dc6c",
+              "leftValue": "={{ $json.body.all_fields.data?.process?.sha256 || '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -832,
+        -992
+      ],
+      "id": "29932bf3-dbca-4914-b43c-23074a0740f2",
+      "name": "Suspicious Process?"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "bc9ed55a-329e-491b-b907-99c4747b283e",
+              "name": "agent_id",
+              "value": "={{ $('Interact with Wazuh').item.json.body.all_fields.agent.id }}",
+              "type": "string"
+            },
+            {
+              "id": "2b405913-d4c0-4be8-989f-6ba79da38c96",
+              "name": "agent_name",
+              "value": "={{ $('Interact with Wazuh').item.json.body.all_fields.agent.name }}",
+              "type": "string"
+            },
+            {
+              "id": "fe6a1b55-468f-428a-bea7-c31ed3872c5a",
+              "name": "pid",
+              "value": "={{ $('Interact with Wazuh').item.json.body.all_fields.data.process.pid }}",
+              "type": "string"
+            },
+            {
+              "id": "ad59dee2-aa2e-4ba0-a600-56373e89c372",
+              "name": "process_user",
+              "value": "={{ $('Interact with Wazuh').item.json.body.all_fields.data.process.user }}",
+              "type": "string"
+            },
+            {
+              "id": "bac401eb-2411-424b-9893-b933071b1e4b",
+              "name": "executable",
+              "value": "={{ $('Interact with Wazuh').item.json.body.all_fields.data.process.executable }}",
+              "type": "string"
+            },
+            {
+              "id": "cb51422d-39d5-44a1-a6bc-7a5cc7065470",
+              "name": "sha256",
+              "value": "={{ $('Interact with Wazuh').item.json.body.all_fields.data.process.sha256 }}",
+              "type": "string"
+            },
+            {
+              "id": "aee5f667-eb3f-4897-b3c0-089d2b108920",
+              "name": "command",
+              "value": "={{ $('Interact with Wazuh').item.json.body.all_fields.data.process.command }}",
+              "type": "string"
+            },
+            {
+              "id": "912c96c3-9f2d-4ee1-bc5a-9a5b90ad6a5f",
+              "name": "rule_id",
+              "value": "={{ Number($('Interact with Wazuh').item.json.body.all_fields.rule.id) }}",
+              "type": "string"
+            },
+            {
+              "id": "a9a0b417-8d5e-4bcc-b5f1-9e8fd2bbd0db",
+              "name": "rule_level",
+              "value": "={{ Number($('Interact with Wazuh').item.json.body.all_fields.rule.level) }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -592,
+        -1008
+      ],
+      "id": "a16d3ae2-3515-4f87-87d9-759a4dfe1253",
+      "name": "Prepare Process Data"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT *\nFROM ioc_cache\nWHERE value = '{{ $('Prepare Process Data').item.json.sha256 }}';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        -368,
+        -1008
+      ],
+      "id": "9d15e496-d26b-4eaf-a7ad-db23762e8e2a",
+      "name": "Process IOC Cache Lookup",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "02a533c4-f1a9-41d5-bc23-90195572afc1",
+              "leftValue": "={{ $('Process IOC Cache Lookup').first().json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "number",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -144,
+        -1008
+      ],
+      "id": "ee9354e7-ae06-439c-87cc-2c0ebbd479c2",
+      "name": "Process IOC in Cache?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://single-node-misp-nginx-1:8443/attributes/restSearch",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Host",
+              "value": "localhost:8443"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"returnFormat\": \"json\",\n  \"value\": \"{{ $('Prepare Process Data').item.json.sha256 }}\",\n  \"type\": \"sha256\"\n}",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        144,
+        -1120
+      ],
+      "id": "b94af900-c2f7-42d2-8f5b-99c04b2fba56",
+      "name": "MISP - Process Hash"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "221f102e-d359-4df9-9779-23d365853661",
+              "leftValue": "={{ $json.response.Attribute.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        368,
+        -1312
+      ],
+      "id": "4cba2708-15ab-41df-9cf1-ac00d4fa95ab",
+      "name": "MISP Process Found?"
+    },
+    {
+      "parameters": {
+        "url": "=https://www.virustotal.com/api/v3/files/{{ $('Prepare Process Data').item.json.sha256 }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        688,
+        -1328
+      ],
+      "id": "e15733fa-99f8-4023-a88f-3a301a4edf08",
+      "name": "VirusTotal - Process Hash"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "859a5369-2b14-4a85-aff5-6b450fefa484",
+              "name": "malicious_count",
+              "value": "={{ $json.data.attributes.last_analysis_stats.malicious }}",
+              "type": "string"
+            },
+            {
+              "id": "df004f1a-2752-4059-867f-d024d808e44d",
+              "name": "total_engines",
+              "value": "={{\n  $json.data.attributes.last_analysis_stats.malicious\n  + $json.data.attributes.last_analysis_stats.suspicious\n  + $json.data.attributes.last_analysis_stats.undetected\n  + $json.data.attributes.last_analysis_stats.harmless\n}}",
+              "type": "string"
+            },
+            {
+              "id": "fe266ec3-17e5-485c-8b9a-b0ed6707cffe",
+              "name": "reputation_score",
+              "value": "={{\n  Math.round(\n    (\n      $json.data.attributes.last_analysis_stats.malicious\n      /\n      (\n        $json.data.attributes.last_analysis_stats.malicious\n        + $json.data.attributes.last_analysis_stats.suspicious\n        + $json.data.attributes.last_analysis_stats.undetected\n        + $json.data.attributes.last_analysis_stats.harmless\n      )\n    ) * 100\n  )\n}}",
+              "type": "string"
+            },
+            {
+              "id": "2e147021-cfc3-43e6-998a-99b2d70aa09c",
+              "name": "verdict",
+              "value": "={{\n  $json.data.attributes.last_analysis_stats.malicious > 10\n  ? 'malveillant'\n  : (\n      $json.data.attributes.last_analysis_stats.malicious > 0\n      ? 'suspect'\n      : 'propre'\n    )\n}}",
+              "type": "string"
+            },
+            {
+              "id": "8505be62-d946-440d-b09a-38cd84d4b3b3",
+              "name": "source",
+              "value": "VirusTotal",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        848,
+        -1328
+      ],
+      "id": "6b85fdd1-d4d8-48d5-82b7-fb2ef3c320d5",
+      "name": "VT Process Fields"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "bc364d79-7f4f-4b40-af16-868d46bdf6b2",
+              "name": "reputation_score",
+              "value": 90,
+              "type": "number"
+            },
+            {
+              "id": "aaa9e488-822a-4198-8c20-3cb2e642cfa0",
+              "name": "verdict",
+              "value": "malveillant",
+              "type": "string"
+            },
+            {
+              "id": "96db322b-697c-49e1-ab53-c00adc41633b",
+              "name": "source",
+              "value": "MISP",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        688,
+        -1136
+      ],
+      "id": "b4adf9ac-9516-475c-9699-62e53a77f275",
+      "name": "MISP Process Hit"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO ioc_cache (\n    value,\n    type,\n    source,\n    verdict,\n    reputation_score\n)\nVALUES (\n    '{{ $('Prepare Process Data').item.json.sha256 }}',\n    'hash',\n    '{{ $json.source }}',\n    '{{ $json.verdict }}',\n    {{ $json.reputation_score }}\n)\nON CONFLICT (value)\nDO UPDATE SET\n    type = EXCLUDED.type,\n    source = EXCLUDED.source,\n    verdict = EXCLUDED.verdict,\n    reputation_score = EXCLUDED.reputation_score\nRETURNING\n    id,\n    value,\n    type,\n    source,\n    verdict,\n    reputation_score;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1104,
+        -1248
+      ],
+      "id": "0ffad1af-5a59-4a42-aca4-614c3f853bea",
+      "name": "Append Process IOC Cache",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f2003c2f-8511-4283-9f74-225f06018e26",
+              "name": "reputation_score",
+              "value": "={{ $('Process IOC Cache Lookup').first().json.reputation_score }}",
+              "type": "string"
+            },
+            {
+              "id": "cd766f5e-573b-4f4f-93a6-be4af3a5f0bb",
+              "name": "verdict",
+              "value": "={{ $('Process IOC Cache Lookup').first().json.verdict }}",
+              "type": "string"
+            },
+            {
+              "id": "e37cf92c-6acc-42fe-b884-6c4c5eb01747",
+              "name": "source",
+              "value": "={{ $('Process IOC Cache Lookup').first().json.source }}",
+              "type": "string"
+            },
+            {
+              "id": "0bfea60e-91ed-4898-bf87-1c816516d65b",
+              "name": "ioc_id",
+              "value": "={{ $('Process IOC Cache Lookup').first().json.id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        368,
+        -992
+      ],
+      "id": "cb8d7ac3-6e25-4122-95c4-ceb7871db069",
+      "name": "Process Cache Hit"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "fb132d64-a92f-4a4e-b205-8d1b7385de35",
+              "name": "ioc_id",
+              "value": "={{ Number($json.id ?? $json.ioc_id) }}",
+              "type": "number"
+            },
+            {
+              "id": "9f41de2c-4561-4acd-878a-df85061449c1",
+              "name": "source",
+              "value": "={{ $json.source }}",
+              "type": "string"
+            },
+            {
+              "id": "5a3246b0-ae28-4108-853f-02d123300790",
+              "name": "verdict",
+              "value": "={{ $json.verdict }}",
+              "type": "string"
+            },
+            {
+              "id": "6027a591-d732-4541-a5da-5dbbd002ae12",
+              "name": "reputation_score",
+              "value": "={{ Number($json.reputation_score) }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1232,
+        -992
+      ],
+      "id": "9ec531eb-c446-4dbf-83cc-1bc148f8ef5f",
+      "name": "Normalize Process TI Result"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "dacc23da-9d09-484c-9e7b-426767d0803c",
+              "name": "risk_score",
+              "value": "={{   Math.min(     100,     Math.round(       Number($json.reputation_score || 0) * 0.7       +       Number($('Prepare Process Data').item.json.rule_level || 0) * 3     )   ) }}",
+              "type": "number"
+            },
+            {
+              "id": "f5ed660d-79a3-4339-9356-75f59bd53459",
+              "name": "criticality",
+              "value": "={{   (     Math.min(       100,       Math.round(         Number($json.reputation_score || 0) * 0.7         +         Number($('Prepare Process Data').item.json.rule_level || 0) * 3       )     )   ) >= 80     ? 'critical'     : (         (           Math.min(             100,             Math.round(               Number($json.reputation_score || 0) * 0.7               +               Number($('Prepare Process Data').item.json.rule_level || 0) * 3             )           )         ) >= 60           ? 'high'           : 'medium'       ) }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1408,
+        -992
+      ],
+      "id": "25d1e9cb-c053-4323-b6f9-555e228d1a6b",
+      "name": "Calculate Process Risk"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO incidents (\n    agent_source,\n    wazuh_rule_id,\n    mitre_technique,\n    ioc_id,\n    risk_score,\n    criticality\n)\nVALUES (\n    '{{ $('Prepare Process Data').item.json.agent_name }}',\n\n    {{ $('Prepare Process Data').item.json.rule_id }},\n\n    NULL,\n\n    {{ $('Normalize Process TI Result').item.json.ioc_id }},\n\n    {{ $('Calculate Process Risk').item.json.risk_score }},\n\n    '{{ $('Calculate Process Risk').item.json.criticality }}'\n)\nRETURNING\n    id,\n    risk_score,\n    criticality;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1584,
+        -992
+      ],
+      "id": "d434d029-451f-4cf1-a4a0-daa3247951c2",
+      "name": "Register Process Incident",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "eb4bd0d1-6d54-4ec0-9f9a-6221bf126e85",
+              "leftValue": "={{ $json.risk_score }}",
+              "rightValue": 50,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1760,
+        -992
+      ],
+      "id": "3d49491d-d164-44ae-b4c2-bec38c5faead",
+      "name": "Process Risk Threshold?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO actions_taken (\n    incident_id,\n    action_type,\n    execution_status\n)\nVALUES (\n    {{ $('Register Process Incident').item.json.id }},\n    'notify_telegram',\n    'pending'\n)\nRETURNING id;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        2000,
+        -1008
+      ],
+      "id": "01c93607-ce31-4abd-8825-83a19710ac73",
+      "name": "Register Process Notification",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "chatId": "<TELEGRAM_CHAT_ID>",
+        "text": "=🚨 SOC - Malicious Process Detected\n\nAgent: {{ $('Prepare Process Data').item.json.agent_name }}\n\nProcess: {{ $('Prepare Process Data').item.json.executable }}\n\nPID: {{ $('Prepare Process Data').item.json.pid }}\n\nUser: {{ $('Prepare Process Data').item.json.process_user }}\n\nCommand: {{ $('Prepare Process Data').item.json.command }}\n\nSHA256: {{ $('Prepare Process Data').item.json.sha256 }}\n\nThreat Intelligence: {{ $('Normalize Process TI Result').item.json.source }}\n\nVerdict: {{ $('Normalize Process TI Result').item.json.verdict }}\n\nRisk score: {{ $('Register Process Incident').item.json.risk_score }}/100\n\nCriticality: {{ $('Register Process Incident').item.json.criticality.toUpperCase() }}\n\nDecision: KILL PROCESS\n\nStatus: Awaiting Active Response",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2208,
+        -1008
+      ],
+      "id": "c0c81b21-224f-4ee1-af55-a2005ee0c950",
+      "name": "Telegram - Malicious Process"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const process = $('Prepare Process Data').item.json;\nconst ti = $('Normalize Process TI Result').item.json;\nconst incident = $('Register Process Incident').item.json;\n\nconst report = `# SOC Incident Report\n\nIncident ID: ${incident.id}\nIncident Type: Malicious Process Execution\n\n## Endpoint\n\nAgent: ${process.agent_name}\nAgent ID: ${process.agent_id}\n\n## Process\n\nPID: ${process.pid}\nUser: ${process.process_user}\nExecutable: ${process.executable}\nCommand: ${process.command}\n\nSHA256:\n${process.sha256}\n\n## Threat Intelligence\n\nSource: ${ti.source}\nVerdict: ${ti.verdict}\nReputation Score: ${ti.reputation_score}\n\n## Risk Assessment\n\nRisk Score: ${incident.risk_score}/100\nCriticality: ${incident.criticality}\n\n## Detection\n\nWazuh Rule: ${process.rule_id}\nWazuh Rule Level: ${process.rule_level}\n\n## Automated Decision\n\nAction: KILL PROCESS\nStatus: Active Response pending\n`;\n\nconst fileName = `incident-${incident.id}-malicious-process.md`;\n\nreturn {\n  json: {\n    ...$json,\n    report_filename: fileName,\n    report_text: report\n  },\n  binary: {\n    report: {\n      data: Buffer.from(report, 'utf8').toString('base64'),\n      mimeType: 'text/markdown',\n      fileName\n    }\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2416,
+        -1008
+      ],
+      "id": "d8a255dc-ef7a-487e-9a97-51657b3b6d26",
+      "name": "Generate Process Incident Report"
+    },
+    {
+      "parameters": {
+        "operation": "sendDocument",
+        "chatId": "<TELEGRAM_CHAT_ID>",
+        "binaryData": true,
+        "binaryPropertyName": "report",
+        "additionalFields": {
+          "caption": "=📄 SOC Incident Report  Incident: {{ $('Register Process Incident').item.json.id }}  Agent: {{ $('Prepare Process Data').item.json.agent_name }}  Process: {{ $('Prepare Process Data').item.json.executable }}  Risk: {{ $('Register Process Incident').item.json.risk_score }}/100"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2608,
+        -1008
+      ],
+      "id": "8b247f54-65d1-4891-bc26-c4c4f29cf0b5",
+      "name": "Telegram - Process Report"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO actions_taken (\n    incident_id,\n    action_type,\n    execution_status,\n    target_pid,\n    target_sha256\n)\nVALUES (\n    {{ $('Register Process Incident').item.json.id }},\n    'kill_process',\n    'pending',\n    '{{ $('Prepare Process Data').item.json.pid }}',\n    '{{ $('Prepare Process Data').item.json.sha256 }}'\n)\nRETURNING\n    id,\n    incident_id,\n    target_pid,\n    target_sha256,\n    execution_status;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        2800,
+        -1008
+      ],
+      "id": "93a6b55f-a3a7-48a3-91a2-50a9d2156f54",
+      "name": "Register Kill Process Pending"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://wazuh.manager:55000/security/user/authenticate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2992,
+        -1008
+      ],
+      "id": "09abdf98-29f0-40fc-95f9-cb3cd28e8ede",
+      "name": "Wazuh Auth - Process"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://wazuh.manager:55000/active-response?agents_list={{ $('Prepare Process Data').item.json.agent_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Wazuh Auth - Process').item.json.data.token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"command\": \"!kill-process-s3.py\",\n  \"arguments\": [\n    String($('Prepare Process Data').item.json.pid),\n    $('Prepare Process Data').item.json.sha256,\n    $('Prepare Process Data').item.json.executable\n  ],\n  \"alert\": {\n    \"rule\": {\n      \"id\": String($('Prepare Process Data').item.json.rule_id)\n    },\n    \"data\": {\n      \"process\": {\n        \"pid\": String($('Prepare Process Data').item.json.pid),\n        \"sha256\": $('Prepare Process Data').item.json.sha256,\n        \"executable\": $('Prepare Process Data').item.json.executable,\n        \"command\": $('Prepare Process Data').item.json.command\n      }\n    }\n  }\n} }}",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        3184,
+        -1008
+      ],
+      "id": "ec4b446f-eea4-4df8-bd9e-f09aee490b4d",
+      "name": "Kill Malicious Process"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE actions_taken\nSET execution_status = 'sent'\nWHERE id = {{ $('Register Kill Process Pending').item.json.id }}\nRETURNING\n    id,\n    incident_id,\n    target_pid,\n    target_sha256,\n    execution_status;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        3408,
+        -1008
+      ],
+      "id": "32f0cd54-24b9-47ee-a0da-2569367724e9",
+      "name": "Mark Kill Process Sent"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "deec21bd-be86-4812-a28a-2c1f27138b21",
+              "leftValue": "={{ String($json.body.all_fields.rule.id) }}",
+              "rightValue": "100212",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "cd3439ad-b695-42ba-92b1-355086bb6040",
+              "leftValue": "={{ String($json.body.all_fields.agent.id) }}",
+              "rightValue": "001",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "f3ca6974-d2af-407b-8aee-03360262af5e",
+              "leftValue": "={{ $json.body.all_fields.full_log || '' }}",
+              "rightValue": "KILL_PROCESS_SUCCESS",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1200,
+        -1184
+      ],
+      "id": "09f9653b-7892-4b07-bbf0-9985ca623fee",
+      "name": "Process Kill Confirmed?"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "12213a4f-d5d4-44fd-823a-29088a5cb650",
+              "name": "pid",
+              "value": "={{ $json.body.all_fields.full_log.match(/pid=(\\d+)/)?.[1] || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "f34596d3-12a7-4289-8f48-4f441c519dae",
+              "name": "executable",
+              "value": "={{ $json.body.all_fields.full_log.match(/exe=(\\S+)/)?.[1] || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "bb7e1f57-88f8-4153-b864-a610f234abe7",
+              "name": "sha256",
+              "value": "={{ $json.body.all_fields.full_log.match(/sha256=([A-Fa-f0-9]{64})/)?.[1] || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "244b0018-94fa-41f3-9365-00a100087ef5",
+              "name": "signal",
+              "value": "={{ $json.body.all_fields.full_log.match(/signal=(SIGTERM|SIGKILL)/)?.[1] || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "45ffa48b-0d05-4b1f-a10e-57beb89ea80d",
+              "name": "agent_name",
+              "value": "={{ $json.body.all_fields.agent.name }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -992,
+        -1200
+      ],
+      "id": "76860395-e1e6-4a5e-a743-c8f7ea81aa7b",
+      "name": "Prepare Kill Confirmation"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    a.id AS action_id,\n    a.incident_id,\n    a.target_pid,\n    a.target_sha256,\n    a.execution_status,\n    a.created_at,\n    i.agent_source,\n    i.risk_score,\n    i.criticality\nFROM actions_taken a\nJOIN incidents i\n    ON i.id = a.incident_id\nWHERE a.action_type = 'kill_process'\n\n  AND a.execution_status IN ('pending', 'sent')\n\n  AND a.target_pid =\n      '{{ $('Prepare Kill Confirmation').item.json.pid }}'\n\n  AND LOWER(a.target_sha256) =\n      LOWER('{{ $('Prepare Kill Confirmation').item.json.sha256 }}')\n\n  AND i.agent_source =\n      '{{ $('Prepare Kill Confirmation').item.json.agent_name }}'\n\n  AND a.created_at >= NOW() - INTERVAL '10 minutes'\n\nORDER BY a.created_at DESC\nLIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        -800,
+        -1200
+      ],
+      "id": "85a82737-d491-4306-b584-309bcf9adf7a",
+      "name": "Find matching kill action",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b2a0d6a4-7f2e-40e4-967f-b3ea5f19acbe",
+              "leftValue": "={{ $json.action_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "number",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -624,
+        -1200
+      ],
+      "id": "6f170554-0241-466b-95b3-2601b9defa11",
+      "name": "Kill action match?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE actions_taken\nSET execution_status = 'completed'\nWHERE id = {{ $('Find matching kill action').item.json.action_id }}\nRETURNING\n    id,\n    incident_id,\n    target_pid,\n    target_sha256,\n    execution_status;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        -384,
+        -1216
+      ],
+      "id": "8c094320-666f-402f-a402-836814f47a5d",
+      "name": "Confirm Kill Process",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "chatId": "<TELEGRAM_CHAT_ID>",
+        "text": "=✅ SOC - Process Successfully Terminated\n\nAgent: {{ $('Prepare Kill Confirmation').item.json.agent_name }}\n\nProcess: {{ $('Prepare Kill Confirmation').item.json.executable }}\n\nPID: {{ $('Prepare Kill Confirmation').item.json.pid }}\n\nSHA256: {{ $('Prepare Kill Confirmation').item.json.sha256 }}\n\nSignal: {{ $('Prepare Kill Confirmation').item.json.signal }}\n\nRisk score: {{ $('Find matching kill action').item.json.risk_score }}/100\n\nCriticality: {{ $('Find matching kill action').item.json.criticality.toUpperCase() }}\n\nAction: KILL PROCESS\n\nStatus: CONFIRMED",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -176,
+        -1216
+      ],
+      "id": "18aa488d-d99d-4fd8-af8c-8aab1ea3ba0e",
+      "name": "Telegram - Process Killed Confirmed",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 528,
+        "width": 4848,
+        "color": "#5E2C87"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1248,
+        -1360
+      ],
+      "id": "f2de846b-7776-409a-a09c-c63319e0af01",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 528,
+        "width": 2944,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1264,
+        -768
+      ],
+      "id": "f7a55877-3bf1-4823-9389-fcb5cf9e02c2",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 864,
+        "width": 3792,
+        "color": "#3A4116"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1264,
+        -192
+      ],
+      "id": "0af0e844-b2da-493a-9a6a-02d9f7af9296",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c05997c6-aa0b-4506-8930-14a73d7b08df",
+              "leftValue": "={{ String($json.body.all_fields.rule.id) }}",
+              "rightValue": "100220",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "4b13c7bf-8223-4d1d-84e0-139aed26688e",
+              "leftValue": "={{ String($json.body.all_fields.agent.id) }}",
+              "rightValue": "001",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "5d6ced1e-b0bc-498f-b049-9ff386ba3fd7",
+              "leftValue": "={{ String($json.body.all_fields.data.alert.signature_id) }}",
+              "rightValue": "1000050",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1200,
+        -1616
+      ],
+      "id": "06d04b95-e25b-4849-a65d-53eee77caee9",
+      "name": "Network Scan Detected?"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "9e3dae06-38ef-4034-9cd6-e8fbf85c67f0",
+              "name": "agent_id",
+              "value": "={{ $('Interact with Wazuh').item.json.body.all_fields.agent.id }}",
+              "type": "string"
+            },
+            {
+              "id": "7b28c9ba-400f-4a9f-9bd6-230d42f254f7",
+              "name": "agent_name",
+              "value": "={{ $('Interact with Wazuh').item.json.body.all_fields.agent.name }}",
+              "type": "string"
+            },
+            {
+              "id": "581fcb4f-5124-4ba4-a969-55ea9bed3f1a",
+              "name": "attacker_ip",
+              "value": "={{ $('Interact with Wazuh').item.json.body.all_fields.data.src_ip }}",
+              "type": "string"
+            },
+            {
+              "id": "20ef3223-ec5a-475e-bb64-7c983693d8bf",
+              "name": "target_ip",
+              "value": "={{ $('Interact with Wazuh').item.json.body.all_fields.data.dest_ip }}",
+              "type": "string"
+            },
+            {
+              "id": "7f945cde-eb9f-48cb-8d4f-74f007352e52",
+              "name": "source_port",
+              "value": "={{ Number($('Interact with Wazuh').item.json.body.all_fields.data.src_port) }}",
+              "type": "number"
+            },
+            {
+              "id": "86a82680-6b71-4469-b56e-814c3bee4245",
+              "name": "destination_port",
+              "value": "={{ Number($('Interact with Wazuh').item.json.body.all_fields.data.dest_port) }}",
+              "type": "number"
+            },
+            {
+              "id": "f1a5cf87-a384-4e7e-b414-5762afbe2e3d",
+              "name": "protocol",
+              "value": "={{ $('Interact with Wazuh').item.json.body.all_fields.data.proto }}",
+              "type": "string"
+            },
+            {
+              "id": "04d30a20-956a-4fc6-be83-6fe0ed289504",
+              "name": "suricata_signature",
+              "value": "={{ $('Interact with Wazuh').item.json.body.all_fields.data.alert.signature }}",
+              "type": "string"
+            },
+            {
+              "id": "acb48897-7445-4ac9-b133-1c3939683f40",
+              "name": "suricata_signature_id",
+              "value": "={{ Number($('Interact with Wazuh').item.json.body.all_fields.data.alert.signature_id) }}",
+              "type": "number"
+            },
+            {
+              "id": "e68b2a64-1b34-4cb7-a4ec-3c160ab02abb",
+              "name": "rule_level",
+              "value": "={{ Number($('Interact with Wazuh').item.json.body.all_fields.rule.level) }}",
+              "type": "number"
+            },
+            {
+              "id": "fb94dad3-48bc-4d49-a16f-b2032aedff33",
+              "name": "mitre_id",
+              "value": "={{ $('Interact with Wazuh').item.json.body.all_fields.rule.mitre.id[0] }}",
+              "type": "string"
+            },
+            {
+              "id": "a875fb28-44e5-44f5-a6a0-239d37406786",
+              "name": "mitre_technique",
+              "value": "={{ $('Interact with Wazuh').item.json.body.all_fields.rule.mitre.technique[0] }}",
+              "type": "string"
+            },
+            {
+              "id": "9f3a9429-6c8f-48cc-96fc-60a1587fb7a6",
+              "name": "mitre_tactic",
+              "value": "={{ $('Interact with Wazuh').item.json.body.all_fields.rule.mitre.tactic[0] }}",
+              "type": "string"
+            },
+            {
+              "id": "30f819b4-c03d-4329-82fa-0200e2198ff2",
+              "name": "rule_id",
+              "value": "={{ Number($('Interact with Wazuh').item.json.body.all_fields.rule.id) }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -560,
+        -1648
+      ],
+      "id": "de72c00c-0e39-4776-ab51-d37acfc4bb5c",
+      "name": "Prepare Network Scan Data"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO incidents (\n    agent_source,\n    wazuh_rule_id,\n    mitre_technique,\n    ioc_id,\n    risk_score,\n    criticality\n)\nVALUES (\n    '{{ $('Prepare Network Scan Data').item.json.agent_name }}',\n    {{ $('Prepare Network Scan Data').item.json.rule_id }},\n    '{{ $('Prepare Network Scan Data').item.json.mitre_id }}',\n    NULL,\n    70,\n    'high'\n)\nRETURNING\n    id,\n    agent_source,\n    wazuh_rule_id,\n    mitre_technique,\n    risk_score,\n    criticality;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        -368,
+        -1648
+      ],
+      "id": "dd61d8cb-081d-4fac-b975-dd31ebc378c2",
+      "name": "Register Network Scan Incident",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "chatId": "<TELEGRAM_CHAT_ID>",
+        "text": "=🔎 SOC - Network Scan Detected\n\nAttacker: {{ $('Prepare Network Scan Data').item.json.attacker_ip }}\n\nTarget: {{ $('Prepare Network Scan Data').item.json.target_ip }}\n\nAgent: {{ $('Prepare Network Scan Data').item.json.agent_name }}\n\nProtocol: {{ $('Prepare Network Scan Data').item.json.protocol }}\n\nSuricata: {{ $('Prepare Network Scan Data').item.json.suricata_signature }}\n\nWazuh Rule: {{ $('Prepare Network Scan Data').item.json.rule_id }}\n\nMITRE ATT&CK: {{ $('Prepare Network Scan Data').item.json.mitre_id }}\n\nTechnique: {{ $('Prepare Network Scan Data').item.json.mitre_technique }}\n\nTactic: {{ $('Prepare Network Scan Data').item.json.mitre_tactic }}\n\nRisk Score: {{ $('Register Network Scan Incident').item.json.risk_score }}/100\n\nCriticality: {{ $('Register Network Scan Incident').item.json.criticality.toUpperCase() }}\n\nStatus: INCIDENT RECORDED",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        -1648
+      ],
+      "id": "cbdf8943-1187-4374-9299-878e75424402",
+      "name": "Telegram - Network Scan Alert",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO actions_taken (\n    incident_id,\n    action_type,\n    execution_status\n)\nVALUES (\n    {{ $('Register Network Scan Incident').item.json.id }},\n    'notify_telegram',\n    'pending'\n)\nRETURNING\n    id,\n    incident_id,\n    execution_status;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        -192,
+        -1648
+      ],
+      "id": "fca5e699-ecd7-45c5-88bd-94ce29cc1448",
+      "name": "Register Scan Notification Pending",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE actions_taken\nSET execution_status = 'completed'\nWHERE id = {{ $('Register Scan Notification Pending').item.json.id }}\nRETURNING\n    id,\n    incident_id,\n    action_type,\n    execution_status;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        176,
+        -1648
+      ],
+      "id": "c457c253-bcc7-4e8c-b495-40e20ed041b0",
+      "name": "Complete Scan Notification",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processed_wazuh_events (\n    wazuh_event_id,\n    scenario\n)\nVALUES (\n    '{{ $('Interact with Wazuh').item.json.body.all_fields.id }}',\n    'scenario5'\n)\nON CONFLICT (wazuh_event_id)\nDO NOTHING\nRETURNING wazuh_event_id;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        -976,
+        -1632
+      ],
+      "id": "17767090-3ba4-44ae-839b-452db46bf366",
+      "name": "Deduplicate Network Scan",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "90936f56-9502-4f83-a324-a2e2882a86e6",
+              "leftValue": "={{ $json.wazuh_event_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -800,
+        -1632
+      ],
+      "id": "4909d776-0d1c-45fe-9b6f-3bc57db3efe1",
+      "name": "New Network Scan Event?"
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 304,
+        "width": 2896,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1248,
+        -1712
+      ],
+      "id": "6d9a6845-6feb-4752-b384-0a6a9e64248b",
+      "name": "Sticky Note3"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Interact with Wazuh": {
+      "main": [
+        [
+          {
+            "node": "FIM Event Router",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Ubuntu Brute Force?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Ubuntu Block Confirmed?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Suspicious Process?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Process Kill Confirmed?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Network Scan Detected?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Cache hit - Set",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "MISP didnt find?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VirusTotal": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "append to ioc_cache",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "append to ioc_cache": {
+      "main": [
+        [
+          {
+            "node": "enregistrement de l'incident et décision finale",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "enregistrement de l'incident et décision finale": {
+      "main": [
+        [
+          {
+            "node": "Risk threshold reached?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Risk threshold reached?": {
+      "main": [
+        [
+          {
+            "node": "Actions to take",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Actions to take 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actions to take": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cache hit - Set": {
+      "main": [
+        [
+          {
+            "node": "enregistrement de l'incident et décision finale",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MISP didnt find?": {
+      "main": [
+        [
+          {
+            "node": "VirusTotal",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "MISP hit - Set",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MISP hit - Set": {
+      "main": [
+        [
+          {
+            "node": "append to ioc_cache",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wazuh Auth": {
+      "main": [
+        [
+          {
+            "node": "quarantine file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "quarantine file": {
+      "main": [
+        [
+          {
+            "node": "Mark quarantine sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a text message": {
+      "main": [
+        [
+          {
+            "node": "Register quarantine pending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FIM Event Router": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Find matching quarantine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Register quarantine pending": {
+      "main": [
+        [
+          {
+            "node": "Wazuh Auth",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark quarantine sent": {
+      "main": [
+        [
+          {
+            "node": "Telegram - File Quarantined",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find matching quarantine": {
+      "main": [
+        [
+          {
+            "node": "Quarantine match?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Quarantine match?": {
+      "main": [
+        [
+          {
+            "node": "Confirm quarantine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirm quarantine": {
+      "main": [
+        [
+          {
+            "node": "Telegram - File Quarantined2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ubuntu Brute Force?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Brute Force Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Brute Force Data": {
+      "main": [
+        [
+          {
+            "node": "Register Brute Force IOC",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Register Brute Force IOC": {
+      "main": [
+        [
+          {
+            "node": "Register Brute Force Incident",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Register Brute Force Incident": {
+      "main": [
+        [
+          {
+            "node": "Brute Force Risk threshold?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Brute Force Risk threshold?": {
+      "main": [
+        [
+          {
+            "node": "Register Brute Force Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Register Brute Force Notification": {
+      "main": [
+        [
+          {
+            "node": "Telegram - SSH Brute Force",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram - SSH Brute Force": {
+      "main": [
+        [
+          {
+            "node": "Register Block IP Pending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Register Block IP Pending": {
+      "main": [
+        [
+          {
+            "node": "Wazuh Auth - Ubuntu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wazuh Auth - Ubuntu": {
+      "main": [
+        [
+          {
+            "node": "Block Brute Force IP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Block Brute Force IP": {
+      "main": [
+        [
+          {
+            "node": "Mark Block IP Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ubuntu Block Confirmed?": {
+      "main": [
+        [
+          {
+            "node": "Find matching block action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find matching block action": {
+      "main": [
+        [
+          {
+            "node": "Block action match?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Block action match?": {
+      "main": [
+        [
+          {
+            "node": "Confirm Block IP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirm Block IP": {
+      "main": [
+        [
+          {
+            "node": "Telegram - IP Block Confirmed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Suspicious Process?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Process Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Process Data": {
+      "main": [
+        [
+          {
+            "node": "Process IOC Cache Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process IOC Cache Lookup": {
+      "main": [
+        [
+          {
+            "node": "Process IOC in Cache?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process IOC in Cache?": {
+      "main": [
+        [
+          {
+            "node": "MISP - Process Hash",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Process Cache Hit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MISP - Process Hash": {
+      "main": [
+        [
+          {
+            "node": "MISP Process Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MISP Process Found?": {
+      "main": [
+        [
+          {
+            "node": "VirusTotal - Process Hash",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "MISP Process Hit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VirusTotal - Process Hash": {
+      "main": [
+        [
+          {
+            "node": "VT Process Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VT Process Fields": {
+      "main": [
+        [
+          {
+            "node": "Append Process IOC Cache",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MISP Process Hit": {
+      "main": [
+        [
+          {
+            "node": "Append Process IOC Cache",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append Process IOC Cache": {
+      "main": [
+        [
+          {
+            "node": "Normalize Process TI Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Cache Hit": {
+      "main": [
+        [
+          {
+            "node": "Normalize Process TI Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Process TI Result": {
+      "main": [
+        [
+          {
+            "node": "Calculate Process Risk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Process Risk": {
+      "main": [
+        [
+          {
+            "node": "Register Process Incident",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Register Process Incident": {
+      "main": [
+        [
+          {
+            "node": "Process Risk Threshold?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Risk Threshold?": {
+      "main": [
+        [
+          {
+            "node": "Register Process Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram - Malicious Process": {
+      "main": [
+        [
+          {
+            "node": "Generate Process Incident Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Process Incident Report": {
+      "main": [
+        [
+          {
+            "node": "Telegram - Process Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram - Process Report": {
+      "main": [
+        [
+          {
+            "node": "Register Kill Process Pending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Register Process Notification": {
+      "main": [
+        [
+          {
+            "node": "Telegram - Malicious Process",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Register Kill Process Pending": {
+      "main": [
+        [
+          {
+            "node": "Wazuh Auth - Process",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wazuh Auth - Process": {
+      "main": [
+        [
+          {
+            "node": "Kill Malicious Process",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kill Malicious Process": {
+      "main": [
+        [
+          {
+            "node": "Mark Kill Process Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Kill Confirmed?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Kill Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Kill Confirmation": {
+      "main": [
+        [
+          {
+            "node": "Find matching kill action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find matching kill action": {
+      "main": [
+        [
+          {
+            "node": "Kill action match?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kill action match?": {
+      "main": [
+        [
+          {
+            "node": "Confirm Kill Process",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirm Kill Process": {
+      "main": [
+        [
+          {
+            "node": "Telegram - Process Killed Confirmed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Network Scan Detected?": {
+      "main": [
+        [
+          {
+            "node": "Deduplicate Network Scan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Network Scan Data": {
+      "main": [
+        [
+          {
+            "node": "Register Network Scan Incident",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Register Network Scan Incident": {
+      "main": [
+        [
+          {
+            "node": "Register Scan Notification Pending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Register Scan Notification Pending": {
+      "main": [
+        [
+          {
+            "node": "Telegram - Network Scan Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram - Network Scan Alert": {
+      "main": [
+        [
+          {
+            "node": "Complete Scan Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduplicate Network Scan": {
+      "main": [
+        [
+          {
+            "node": "New Network Scan Event?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "New Network Scan Event?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Network Scan Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "nodeGroups": [],
+  "tags": []
+}

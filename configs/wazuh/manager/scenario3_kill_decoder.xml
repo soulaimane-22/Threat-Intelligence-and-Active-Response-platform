@@ -1,0 +1,7 @@
+<decoder name="scenario3-kill-success">
+  <prematch type="pcre2">kill-process-s3\.py: KILL_PROCESS_SUCCESS</prematch>
+
+  <regex type="pcre2">KILL_PROCESS_SUCCESS\s+pid=(\d+)\s+exe=(\S+)\s+sha256=([A-Fa-f0-9]{64})\s+signal=(SIGTERM|SIGKILL)</regex>
+
+  <order>process.pid,process.executable,process.sha256,process.signal</order>
+</decoder>
