@@ -4,7 +4,6 @@ An end-to-end security monitoring, threat intelligence enrichment, risk assessme
 
 The project demonstrates how endpoint and network detections can be transformed into enriched, prioritized incidents and followed by automated containment actions such as file quarantine, malicious process termination, and source IP blocking.
 
-> This repository is a portfolio-oriented reference implementation created for a controlled lab environment. Secrets, private keys, credentials, runtime data, and malicious samples are intentionally excluded.
 
 ## Table of Contents
 
