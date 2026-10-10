@@ -446,7 +446,7 @@ The dashboard includes views for detection timelines, detections by scenario, MI
 │   │   ├── Network Topology.png
 │   │   └── workflow.png
 │   └── dashboard
-│       └── Screenshot From 2026-10-05 22-22-22.png
+│       └── dashboard-wazuh.png
 └── scripts
     ├── active-response
     │   ├── kill-process-s3.py
@@ -482,8 +482,8 @@ Private documentation, original exports, credentials, runtime data, certificates
 ### 1. Clone the repository
 
 ```bash
-git clone <YOUR_REPOSITORY_URL>
-cd <YOUR_REPOSITORY_DIRECTORY>
+git clone https://github.com/soulaimane-22/Threat-Intelligence-and-Active-Response-platform.git
+cd Threat-Intelligence-and-Active-Response-platform
 ```
 
 ### 2. Prepare environment variables
